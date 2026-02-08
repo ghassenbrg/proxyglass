@@ -26,7 +26,13 @@ Local build:
 docker build -t proxyglass:local .
 ```
 
-Note: this repo intentionally avoids `npm install` at build/runtime; the image runs TypeScript directly via `node --experimental-strip-types`.
+Note: the image installs runtime deps (`prom-client`) during `docker build`. The container runs TypeScript directly via `node --experimental-strip-types` (no separate TS build step).
+
+If you are doing local development (not Docker), install deps once:
+
+```bash
+npm install
+```
 
 Tag for a registry (examples):
 
@@ -131,6 +137,165 @@ If you enable `REQUIRE_TOKEN=true` + `TOKEN=...`, pass it as:
 `http://127.0.0.1:9090/ui?token=<TOKEN>`
 
 ## 6) Use The In-Pod CLI (Works Even If UI/API Is Not Externally Reachable)
+
+### CLI Overview
+
+`proxyglassctl` is shipped inside the proxyglass container image (available on `PATH`). It talks to the local mgmt API at `http://127.0.0.1:$MGMT_PORT` (default `9090`), so it works reliably via:
+
+```bash
+kubectl -n monitor exec deploy/proxyglass -- proxyglassctl <command> [flags...]
+```
+
+If you changed `MGMT_PORT`, the CLI will pick it up from the container environment. You can also override it per-invocation:
+
+```bash
+kubectl -n monitor exec deploy/proxyglass -- env MGMT_PORT=9090 proxyglassctl stats
+```
+
+### Authentication (If Enabled)
+
+If `REQUIRE_TOKEN=true` is set on proxyglass, you must provide the bearer token to the CLI. Use either `PROXYGLASS_TOKEN` or `TOKEN`:
+
+```bash
+kubectl -n monitor exec deploy/proxyglass -- env PROXYGLASS_TOKEN=<TOKEN> proxyglassctl tail
+```
+
+If the token is missing or wrong, you’ll see `proxyglassctl: http 401`.
+
+### Commands
+
+`proxyglassctl` supports:
+
+- `tail`: stream events continuously (SSE) with an optional initial backfill
+- `search`: one-shot query (no streaming)
+- `stats`: top hosts/clients and status distribution
+- `help`
+
+### tail (Streaming)
+
+`tail` is the fastest way to “live watch” what a workload is doing.
+
+```bash
+kubectl -n monitor exec deploy/proxyglass -- proxyglassctl tail
+```
+
+Common flags:
+
+- `--q "<filter expr>"`: filter events (AND, space-separated)
+- `--since <cursor|duration>`:
+  - cursor: a numeric event cursor (monotonic)
+  - duration: `10m`, `30s`, `1h`, `500ms` (relative to now)
+- `--limit <n>`: initial backfill size before streaming (default `200`)
+- `--pretty`: human-readable output (default is JSON lines)
+- `--json`: force JSON lines even if you normally use `--pretty`
+
+Examples:
+
+```bash
+# Tail only HTTPS CONNECT to httpbin.org
+kubectl -n monitor exec deploy/proxyglass -- proxyglassctl tail --q "scheme=https host=httpbin.org"
+
+# Backfill last 10 minutes then stream
+kubectl -n monitor exec deploy/proxyglass -- proxyglassctl tail --since 10m --limit 1000
+
+# Pretty output
+kubectl -n monitor exec deploy/proxyglass -- proxyglassctl tail --pretty
+```
+
+How cursors work:
+
+- Every stored event has a `cursor` (monotonic increasing integer).
+- `/api/events` returns `next_cursor` you can use as a resume point.
+- When `tail` starts, it fetches a batch from `/api/events` and then switches to `/api/stream`.
+
+### search (One-Shot)
+
+`search` fetches a finite set of events and exits.
+
+```bash
+kubectl -n monitor exec deploy/proxyglass -- proxyglassctl search --since 10m --q "scheme=http method=GET"
+```
+
+Time range flags:
+
+- `--since <cursor|duration>`: same semantics as `tail`
+- `--from <iso>`: ISO timestamp, e.g. `2026-02-08T12:34:56.789Z`
+- `--to <iso>`: ISO timestamp
+- `--limit <n>`: max number of returned events (default `2000`)
+
+Examples:
+
+```bash
+# HTTPS CONNECTs only (no paths/status, by design)
+kubectl -n monitor exec deploy/proxyglass -- proxyglassctl search --since 30m --q "scheme=https"
+
+# Find all HTTP 5xx for a client over the last hour
+kubectl -n monitor exec deploy/proxyglass -- proxyglassctl search --since 1h --q "scheme=http client=payments-api status_class=5xx"
+
+# Exact ISO window
+kubectl -n monitor exec deploy/proxyglass -- proxyglassctl search --from 2026-02-08T00:00:00.000Z --to 2026-02-08T01:00:00.000Z
+```
+
+### stats
+
+`stats` summarizes the in-memory event buffer (respecting the same time range and filter flags).
+
+```bash
+kubectl -n monitor exec deploy/proxyglass -- proxyglassctl stats --since 30m
+kubectl -n monitor exec deploy/proxyglass -- proxyglassctl stats --since 30m --q "client=app-demo"
+```
+
+The output includes:
+
+- total matching events
+- dropped events (ring-buffer overwrites due to `MAX_EVENTS`)
+- top hosts
+- top clients
+- status distribution (HTTP) and `connect` for CONNECT events
+
+### Filter Expression Reference
+
+Filters are ANDed (space-separated tokens). Quotes are supported for values with spaces:
+
+```bash
+--q 'host=httpbin.org method=GET path_contains=/get'
+```
+
+Supported tokens:
+
+- `host=example.com`
+- `method=GET`
+- `scheme=http` or `scheme=https`
+- `path_contains=/api` (HTTP only; CONNECT has no path)
+- `client=payments-api`
+- `status=200` (HTTP only)
+- `status_class=2xx` (HTTP only)
+
+Notes:
+
+- `scheme=https` corresponds to `CONNECT` events in proxyglass (no TLS MITM).
+- `status` and `status_class` will never match CONNECT events.
+
+### Output Formats
+
+Default output is JSON lines (one full event per line). This is best for piping into tools:
+
+```bash
+kubectl -n monitor exec deploy/proxyglass -- proxyglassctl tail --q "host=httpbin.org" | head
+```
+
+Pretty output is intended for humans:
+
+```bash
+kubectl -n monitor exec deploy/proxyglass -- proxyglassctl tail --pretty
+```
+
+### Troubleshooting The CLI
+
+- `proxyglassctl: http 401`: token auth enabled; pass `PROXYGLASS_TOKEN`.
+- `proxyglassctl: http 503`: proxyglass is not ready yet; check `kubectl -n monitor get pods` and `kubectl -n monitor logs`.
+- `proxyglassctl: stream http 401/404/...`: mgmt server not reachable at `127.0.0.1:$MGMT_PORT` inside the container; confirm `MGMT_PORT` and probes.
+- Empty results: either the workload isn’t using the proxy, or your filter is too strict. Start with `proxyglassctl tail` with no `--q`.
 
 Tail:
 

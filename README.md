@@ -102,6 +102,8 @@ kubectl -n monitor exec deploy/proxyglass -- proxyglassctl search --since 10m --
 kubectl -n monitor exec deploy/proxyglass -- proxyglassctl stats --since 30m
 ```
 
+Full CLI reference (commands, filters, cursors, auth, troubleshooting): `GUIDE.md`.
+
 Filter expression language (AND, space-separated):
 
 - `host=example.com`
@@ -159,6 +161,7 @@ Example NetworkPolicy: `deploy/networkpolicy-example.yaml`.
 
 Local run:
 ```bash
+npm install
 node --experimental-strip-types src/server.ts
 ```
 

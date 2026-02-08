@@ -22,13 +22,5 @@ build/
 # Kubernetes local tooling
 .kube/
 
-# Ignore node_modules by default, but keep the minimal local shims committed
-node_modules/*
-!node_modules/prom-client/
-!node_modules/prom-client/**
-!node_modules/vitest/
-!node_modules/vitest/**
-
-# Never commit generated lockfiles under node_modules
-node_modules/.package-lock.json
-
+# Dependencies
+node_modules/
