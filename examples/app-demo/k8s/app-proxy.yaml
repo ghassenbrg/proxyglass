@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-demo
+  namespace: demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: app-demo
+  template:
+    metadata:
+      labels:
+        app: app-demo
+    spec:
+      containers:
+        - name: app
+          image: proxyglass-app-demo:local
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PORT
+              value: "8080"
+            - name: HTTP_PROXY
+              value: http://proxyglass.monitor.svc.cluster.local:3128
+            - name: HTTPS_PROXY
+              value: http://proxyglass.monitor.svc.cluster.local:3128
+            - name: NO_PROXY
+              value: localhost,127.0.0.1,.svc,.cluster.local,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+            - name: PROXYGLASS_ID
+              value: app-demo
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-demo
+  namespace: demo
+spec:
+  selector:
+    app: app-demo
+  ports:
+    - port: 8080
+      targetPort: 8080
+

@@ -1,0 +1,16 @@
+{
+  "name": "proxyglass",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Kubernetes-friendly forward proxy for observing outbound HTTP/HTTPS (CONNECT) traffic without TLS MITM.",
+  "license": "MIT",
+  "scripts": {
+    "start": "node --experimental-strip-types src/server.ts",
+    "proxyglassctl": "node --experimental-strip-types src/cli/proxyglassctl.ts",
+    "test": "node --test --experimental-strip-types tests/*.test.ts"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-curl
+  namespace: demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: demo-curl
+  template:
+    metadata:
+      labels:
+        app: demo-curl
+    spec:
+      containers:
+        - name: curl
+          image: curlimages/curl:8.6.0
+          command: ["sh","-c"]
+          args:
+            - |
+              echo "demo-curl (no proxy) starting";
+              while true; do
+                curl -fsS http://httpbin.org/get >/dev/null || true;
+                curl -fsS https://httpbin.org/status/200 >/dev/null || true;
+                sleep 5;
+              done
+          resources:
+            requests:
+              cpu: 5m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+

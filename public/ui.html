@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>proxyglass</title>
+    <style>
+      :root {
+        --bg: #0b1020;
+        --panel: rgba(255, 255, 255, 0.06);
+        --panel2: rgba(255, 255, 255, 0.10);
+        --text: rgba(255, 255, 255, 0.92);
+        --muted: rgba(255, 255, 255, 0.68);
+        --accent: #66e3c4;
+        --warn: #ffcc66;
+        --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      }
+      body {
+        margin: 0;
+        background: radial-gradient(1200px 700px at 15% 10%, rgba(102, 227, 196, 0.16), transparent 55%),
+          radial-gradient(1100px 700px at 80% 30%, rgba(255, 204, 102, 0.14), transparent 60%),
+          var(--bg);
+        color: var(--text);
+        font: 14px/1.4 system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif;
+      }
+      header {
+        padding: 18px 18px 10px 18px;
+        display: flex;
+        gap: 14px;
+        align-items: baseline;
+      }
+      header h1 {
+        margin: 0;
+        font-size: 18px;
+        letter-spacing: 0.4px;
+      }
+      header .hint {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      main {
+        padding: 0 18px 18px 18px;
+        display: grid;
+        grid-template-columns: 1fr 320px;
+        gap: 14px;
+      }
+      @media (max-width: 980px) {
+        main { grid-template-columns: 1fr; }
+      }
+      .panel {
+        background: var(--panel);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 14px;
+        overflow: hidden;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+      }
+      .panel .hd {
+        padding: 10px 12px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .panel .hd strong { font-size: 13px; }
+      .panel .bd { padding: 12px; }
+      input[type="text"] {
+        width: 100%;
+        background: rgba(0, 0, 0, 0.25);
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        color: var(--text);
+        border-radius: 10px;
+        padding: 9px 10px;
+        outline: none;
+        font-family: var(--mono);
+        font-size: 12px;
+      }
+      .kpi {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+      .kpi .box {
+        background: var(--panel2);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 12px;
+        padding: 10px;
+      }
+      .kpi .n { font: 600 18px/1 var(--mono); }
+      .kpi .l { color: var(--muted); font-size: 11px; margin-top: 6px; }
+      pre {
+        margin: 0;
+        font-family: var(--mono);
+        font-size: 12px;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .events {
+        height: calc(100vh - 170px);
+        overflow: auto;
+        padding: 10px 12px;
+      }
+      .event {
+        padding: 8px 10px;
+        border-radius: 10px;
+        background: rgba(0, 0, 0, 0.22);
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        margin-bottom: 8px;
+      }
+      details {
+        margin-top: 8px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        border-radius: 10px;
+        padding: 8px 10px;
+      }
+      details summary {
+        cursor: pointer;
+        color: var(--muted);
+        font-family: var(--mono);
+        font-size: 11px;
+        user-select: none;
+      }
+      .event .meta { color: var(--muted); font-size: 11px; margin-bottom: 4px; }
+      .pill {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        font: 600 11px/1 var(--mono);
+        color: rgba(255, 255, 255, 0.9);
+        background: rgba(255, 255, 255, 0.06);
+      }
+      .pill.ok { border-color: rgba(102, 227, 196, 0.35); color: rgba(102, 227, 196, 0.95); }
+      .pill.warn { border-color: rgba(255, 204, 102, 0.35); color: rgba(255, 204, 102, 0.95); }
+      .smalllist { font-family: var(--mono); font-size: 12px; }
+      .smalllist div { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; border-bottom: 1px dashed rgba(255,255,255,0.10); }
+      .smalllist div:last-child { border-bottom: none; }
+      a { color: var(--accent); text-decoration: none; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>proxyglass</h1>
+      <div class="hint">Live tail of outbound HTTP + HTTPS CONNECT (no TLS MITM).</div>
+    </header>
+    <main>
+      <section class="panel">
+        <div class="hd">
+          <strong>Live Events</strong>
+          <span class="hint">Filter expression:</span>
+          <span class="hint"><code>host=... method=... scheme=... path_contains=... client=... status=... status_class=2xx</code></span>
+        </div>
+        <div class="bd">
+          <input id="filter" type="text" placeholder='e.g. scheme=https host=httpbin.org client=app-demo' />
+        </div>
+        <div id="events" class="events"></div>
+      </section>
+
+      <aside class="panel">
+        <div class="hd"><strong>Stats</strong><span class="hint">(last ~in-memory)</span></div>
+        <div class="bd">
+          <div class="kpi">
+            <div class="box"><div id="kpiTotal" class="n">0</div><div class="l">events</div></div>
+            <div class="box"><div id="kpiDropped" class="n">0</div><div class="l">dropped</div></div>
+          </div>
+          <div style="height: 12px"></div>
+          <div class="hint" style="margin-bottom: 6px">Top destinations</div>
+          <div id="topHosts" class="smalllist"></div>
+          <div style="height: 12px"></div>
+          <div class="hint" style="margin-bottom: 6px">Top clients</div>
+          <div id="topClients" class="smalllist"></div>
+        </div>
+      </aside>
+    </main>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const filterEl = $("filter");
+      const eventsEl = $("events");
+      const kpiTotal = $("kpiTotal");
+      const kpiDropped = $("kpiDropped");
+      const topHostsEl = $("topHosts");
+      const topClientsEl = $("topClients");
+
+      let es = null;
+      let token = new URLSearchParams(location.search).get("token") || localStorage.getItem("proxyglassToken") || "";
+      if (token) localStorage.setItem("proxyglassToken", token);
+
+      function authFetch(url) {
+        const headers = token ? { Authorization: "Bearer " + token } : {};
+        return fetch(url, { headers });
+      }
+
+      function renderList(el, rows, kKey, vKey) {
+        el.innerHTML = "";
+        for (const r of rows || []) {
+          const div = document.createElement("div");
+          const left = document.createElement("span");
+          left.textContent = r[kKey];
+          const right = document.createElement("span");
+          right.textContent = String(r[vKey]);
+          div.appendChild(left);
+          div.appendChild(right);
+          el.appendChild(div);
+        }
+      }
+
+      function pillFor(ev) {
+        const st = ev.obs && ev.obs.status;
+        if (st == null) return '<span class="pill warn">CONNECT</span>';
+        const c = Math.floor(st / 100);
+        const cls = c === 2 ? "ok" : (c === 3 ? "warn" : "warn");
+        return `<span class="pill ${cls}">${st}</span>`;
+      }
+
+      function addEvent(ev) {
+        const div = document.createElement("div");
+        div.className = "event";
+        const meta = document.createElement("div");
+        meta.className = "meta";
+        const cid = (ev.client && ev.client.id) || "unknown";
+        const cip = (ev.client && ev.client.ip) || "?";
+        const dst = (ev.dst && ev.dst.host) ? `${ev.dst.host}:${ev.dst.port}` : "?";
+        meta.textContent = `${ev.ts}  ${cid}@${cip}  ->  ${dst}`;
+        const body = document.createElement("div");
+        const p = (ev.http && ev.http.path) ? " " + ev.http.path : "";
+        const lat = ev.obs && ev.obs.latency_ms != null ? `  ${ev.obs.latency_ms}ms` : "";
+        body.innerHTML = `${pillFor(ev)} <span class="pill">${(ev.http && ev.http.scheme) || "?"}</span> <span class="pill">${(ev.http && ev.http.method) || "?"}</span> <span class="pill">${dst}</span><span style="color:rgba(255,255,255,0.85); font-family: var(--mono)">${p}${lat}</span>`;
+        div.appendChild(meta);
+        div.appendChild(body);
+
+        const details = document.createElement("details");
+        const sum = document.createElement("summary");
+        sum.textContent = "raw event (includes HTTP req/res if enabled)";
+        const pre = document.createElement("pre");
+        pre.textContent = JSON.stringify(ev, null, 2);
+        details.appendChild(sum);
+        details.appendChild(pre);
+        div.appendChild(details);
+
+        eventsEl.prepend(div);
+        while (eventsEl.childNodes.length > 250) eventsEl.removeChild(eventsEl.lastChild);
+      }
+
+      async function refreshStats() {
+        const q = filterEl.value.trim();
+        const url = "/api/stats" + (q ? ("?q=" + encodeURIComponent(q)) : "");
+        const r = await authFetch(url);
+        if (!r.ok) return;
+        const s = await r.json();
+        kpiTotal.textContent = String(s.total || 0);
+        kpiDropped.textContent = String(s.dropped_total || 0);
+        renderList(topHostsEl, s.top_hosts, "host", "count");
+        renderList(topClientsEl, s.top_clients, "client_id", "count");
+      }
+
+      function connect() {
+        if (es) { es.close(); es = null; }
+        const q = filterEl.value.trim();
+        const url = new URL("/api/stream", location.origin);
+        if (q) url.searchParams.set("q", q);
+        if (token) url.searchParams.set("token", token); // SSE can't set headers
+        es = new EventSource(url.toString());
+        es.onmessage = (msg) => {
+          try { addEvent(JSON.parse(msg.data)); } catch {}
+        };
+        es.onerror = () => {
+          // keep the UI quiet; EventSource retries automatically
+        };
+        refreshStats().catch(() => {});
+      }
+
+      let t = null;
+      filterEl.addEventListener("input", () => {
+        clearTimeout(t);
+        t = setTimeout(connect, 250);
+      });
+
+      connect();
+      setInterval(() => refreshStats().catch(() => {}), 4000);
+    </script>
+  </body>
+</html>

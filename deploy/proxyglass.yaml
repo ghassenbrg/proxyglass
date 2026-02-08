@@ -1,0 +1,88 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: proxyglass-config
+  namespace: monitor
+data:
+  PROXY_PORT: "3128"
+  MGMT_PORT: "9090"
+  MAX_EVENTS: "5000"
+  LOG_FORMAT: "json"
+  DEFAULT_CLIENT_ID: "unknown"
+  SAMPLE_RATE: "1.0"
+  # Optional (HTTP only; HTTPS CONNECT cannot be decoded without TLS MITM):
+  # CAPTURE_HTTP_HEADERS: "true"
+  # CAPTURE_HTTP_BODY_BYTES: "4096"
+  # CAPTURE_HTTP_BODY_TEXT: "true"
+  # Optional:
+  # REQUIRE_TOKEN: "true"
+  # TOKEN: "change-me"
+  # ALLOW_HOST_REGEX: ".*"
+  # DENY_HOST_REGEX: "^169\\.254\\."
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: proxyglass
+  namespace: monitor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: proxyglass
+  template:
+    metadata:
+      labels:
+        app: proxyglass
+    spec:
+      containers:
+        - name: proxyglass
+          image: proxyglass:local
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: proxyglass-config
+          ports:
+            - name: proxy
+              containerPort: 3128
+            - name: mgmt
+              containerPort: 9090
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 9090
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 9090
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            runAsNonRoot: true
+            runAsUser: 10001
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: proxyglass
+  namespace: monitor
+spec:
+  selector:
+    app: proxyglass
+  ports:
+    - name: proxy
+      port: 3128
+      targetPort: 3128
+    - name: mgmt
+      port: 9090
+      targetPort: 9090
+  type: ClusterIP

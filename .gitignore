@@ -1,0 +1,34 @@
+.DS_Store
+.idea/
+.vscode/
+
+# Node / test artifacts
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+coverage/
+.nyc_output/
+
+# Build artifacts (if you add a build step later)
+dist/
+build/
+*.tsbuildinfo
+
+# Local env / secrets
+.env
+.env.*
+
+# Kubernetes local tooling
+.kube/
+
+# Ignore node_modules by default, but keep the minimal local shims committed
+node_modules/*
+!node_modules/prom-client/
+!node_modules/prom-client/**
+!node_modules/vitest/
+!node_modules/vitest/**
+
+# Never commit generated lockfiles under node_modules
+node_modules/.package-lock.json
+

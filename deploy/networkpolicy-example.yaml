@@ -1,0 +1,27 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: proxyglass-allow-proxy-from-demo
+  namespace: monitor
+spec:
+  podSelector:
+    matchLabels:
+      app: proxyglass
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: demo
+      ports:
+        - protocol: TCP
+          port: 3128
+    # Optionally allow mgmt port from the same namespace only:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitor
+      ports:
+        - protocol: TCP
+          port: 9090
+
